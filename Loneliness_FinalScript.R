@@ -44,8 +44,7 @@ nci <- read_csv(file.path(in_dir, "NCI_Data.csv"), show_col_types = FALSE,
 df <- left_join(raw, select(nci, record, NCI_Center), by = "record")
 
 
-# ---- variable construction ----
-
+# ---- variable construction + inclusion criteria ----
 ucla_map <- c("Hardly ever" = 1, "Some of the time" = 2, "Often" = 3)
 
 df <- df %>%
@@ -150,6 +149,9 @@ print(table(df$Trouble_With_Expenses, df$Financial_Trouble, useNA = "ifany"))
 
 table(df$Role)
 sum(!is.na(df$UCLA_Score))
+
+#Applying age exclusion criteria
+df <- df %>% filter(Age >= 18)
 
 write_csv(df, file.path(out_dir, "final_analytic_data.csv"))
 
