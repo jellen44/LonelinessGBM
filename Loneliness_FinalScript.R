@@ -23,8 +23,8 @@
 # results below are reported as an OR and a beta coefficient side by side.
 # ---------------------------------------------------------------------------
 
-in_dir  <- "~/dropbox/MedicalSchool/Projects/GBM_Survey_Analysis"
-out_dir <- "~/dropbox/Loneliness_GBM/Final"
+in_dir  <- "/Users/jellen/dropbox/MedicalSchool/Projects/GBM_Survey_Analysis"
+out_dir <- "~/dropbox/"
 
 library(dplyr)
 library(readr)
@@ -51,7 +51,7 @@ df <- df %>%
   mutate(
     UCLA_Score = ucla_map[Companionship] + ucla_map[Left_Out] + ucla_map[Isolated_Others],
     Lonely     = as.integer(UCLA_Score >= 6),
-
+    
     # Order matters: patients are claimed first, so SurvivalStatus is only ever
     # read for caregivers (for whom it refers to the person they cared for).
     Role = case_when(
@@ -59,13 +59,13 @@ df <- df %>%
       SurvivalStatus   == "Deceased"    ~ "Bereaved Caregiver",
       TRUE                              ~ "Current Caregiver"
     ) %>% factor(levels = c("Patient", "Current Caregiver", "Bereaved Caregiver")),
-
+    
     # 2-group version, kept so the original abstract numbers can be reproduced
     Caregiver_binary = factor(
       if_else(CaregiverPatient == "GBM Patient", "Patient", "Caregiver"),
       levels = c("Patient", "Caregiver")
     ),
-
+    
     # Sample is 88% White, so the primary models collapse to White/Nonwhite.
     # Race_3cat pulls Hispanic out separately for S4.
     Race_Category = case_when(
@@ -73,29 +73,29 @@ df <- df %>%
       is.na(Race)     ~ NA_character_,
       TRUE            ~ "Nonwhite"
     ) %>% factor(levels = c("White", "Nonwhite")),
-
+    
     Race_3cat = case_when(
       Race == "White"              ~ "White",
       Race == "Hispanic or Latino" ~ "Hispanic",
       is.na(Race)                  ~ NA_character_,
       TRUE                         ~ "Other Nonwhite"
     ) %>% factor(levels = c("White", "Hispanic", "Other Nonwhite")),
-
+    
     # RUCA 1-3 = metropolitan core / high commuting flow
     Urban_Rural = factor(if_else(RUCACode <= 3, "Urban", "Rural"),
                          levels = c("Rural", "Urban")),
-
+    
     # raw field is 0 = had trouble paying, so flip it
     Financial_Trouble = as.integer(Trouble_With_Expenses == 0),
-
+    
     # a few free-text diagnosis years are implausible; clamp to 0-30
     Yrs_Since_Dx   = pmin(pmax(2024 - Diagnosis_Year, 0), 30),
     Distance_Miles = as.numeric(Miles_From_Hospital),
-
+    
     # n = 6 chose "prefer not to say"; too few to keep as a level
     Gender_clean = factor(na_if(Gender, "Prefer not to say"),
                           levels = c("Female", "Male")),
-
+    
     NCI_Center = as.integer(NCI_Center == "Yes")
   )
 
@@ -114,7 +114,7 @@ df <- df %>%
       Education %in% edu_some    ~ "Some College",
       Education %in% edu_college ~ "College+"
     ) %>% factor(levels = c("College+", "Some College", "Less than College")),
-
+    
     # Uninsured are set to NA rather than folded into public, which drops them
     # from every adjusted model. Small group, but it moves the modelled n --
     # report the model n in the manuscript, not the full 525.
@@ -123,7 +123,7 @@ df <- df %>%
       Private_Insurance == 1 ~ "Private",
       TRUE                   ~ "Public"
     ) %>% factor(levels = c("Private", "Public")),
-
+    
     Sx_to_Dx = case_when(
       Time_Symptoms_to_Diagnosis %in% quick_dx ~ "Less than 1 month",
       Time_Symptoms_to_Diagnosis %in% slow_dx  ~ "Over 1 month"
@@ -152,9 +152,6 @@ sum(!is.na(df$UCLA_Score))
 
 #Applying age exclusion criteria
 df <- df %>% filter(Age >= 18)
-
-write_csv(df, file.path(out_dir, "final_analytic_data.csv"))
-
 
 # ---- helpers ----
 
@@ -218,11 +215,11 @@ cat_row <- function(v, label) {
   ct <- table(df$Role, df[[v]])
   n  <- rowSums(ct)
   p  <- suppressWarnings(chisq.test(ct)$p.value)
-
+  
   head_row <- data.frame(Variable = label, Patient = "", `Current Caregiver` = "",
                          `Bereaved Caregiver` = "", `p-value` = fmt_p(p),
                          check.names = FALSE)
-
+  
   body <- lapply(colnames(ct), function(l) {
     k   <- ct[, l]
     pct <- 100 * k / n
@@ -233,7 +230,7 @@ cat_row <- function(v, label) {
       `Bereaved Caregiver` = sprintf("%d (%.1f%%)", k[3], pct[3]),
       `p-value` = "", check.names = FALSE)
   })
-
+  
   bind_rows(head_row, bind_rows(body))
 }
 
@@ -258,7 +255,6 @@ table1 <- bind_rows(
   cat_row("Lonely",            "Lonely (UCLA-3 >= 6)")
 )
 
-write_csv(table1, file.path(out_dir, "Table1_descriptives_by_role.csv"))
 print(table1, row.names = FALSE)
 
 
@@ -309,7 +305,7 @@ covars <- ~ . + Age + Gender_clean + Urban_Rural + Race_Category +
 role_effect <- function(rhs_var, term, label) {
   f_crude <- as.formula(paste("Lonely ~", rhs_var))
   f_adj   <- update(f_crude, covars)
-
+  
   lapply(list(Unadjusted = f_crude, `Fully adjusted` = f_adj), function(f) {
     ml <- glm(f, data = df, family = binomial)
     mm <- lm(update(f, UCLA_Score ~ .), data = df)   # same RHS, continuous LHS
@@ -333,7 +329,6 @@ table2 <- bind_rows(
   role_effect("Role", "RoleBereaved Caregiver", "Bereaved Caregiver vs Patient")
 )
 
-write_csv(table2, file.path(out_dir, "Table2_role_associations.csv"))
 print(table2, row.names = FALSE)
 
 
@@ -370,7 +365,6 @@ table3 <- bind_rows(lapply(names(terms3), function(tm) {
              check.names = FALSE)
 }))
 
-write_csv(table3, file.path(out_dir, "Table3_primary_model.csv"))
 print(table3, row.names = FALSE)
 
 # model n differs from 525 because of the insurance and gender exclusions above
@@ -396,7 +390,7 @@ key_terms <- c(Current  = "RoleCurrent Caregiver",
 sens_row <- function(f, label, data = df) {
   ml <- glm(f, data = data, family = binomial)
   mm <- lm(update(f, UCLA_Score ~ .), data = data)
-
+  
   out <- data.frame(Sensitivity = label, N = nobs(ml), check.names = FALSE)
   for (nm in names(key_terms)) {
     tm <- key_terms[[nm]]
@@ -422,7 +416,6 @@ table4 <- bind_rows(
            data = filter(df, Diagnosis_Year >= 2022))
 )
 
-write_csv(table4, file.path(out_dir, "Table4_sensitivity.csv"))
 print(table4, row.names = FALSE)
 
 # Hispanic / other-nonwhite ORs quoted in the race paragraph of the Results
@@ -512,8 +505,6 @@ p2 <- ggplot(f1, aes(Role, mean_ucla, fill = Role)) +
 fig1 <- p1 + p2
 
 # cairo_pdf so the >= glyph renders and fonts embed for submission
-ggsave(file.path(out_dir, "Figure1_loneliness_by_role.pdf"), fig1,
-       width = 11, height = 5, device = cairo_pdf)
 ggsave(file.path(out_dir, "Figure1_loneliness_by_role.png"), fig1,
        width = 11, height = 5, dpi = 600)
 
@@ -560,7 +551,5 @@ p3 <- ggplot(fp, aes(OR, label)) +
         axis.line.y = element_blank(),
         axis.text.y = element_text(size = 9.5))
 
-ggsave(file.path(out_dir, "Figure2_forest_plot.pdf"), p3,
-       width = 8, height = 6.5, device = cairo_pdf)
 ggsave(file.path(out_dir, "Figure2_forest_plot.png"), p3,
-       width = 8, height = 6.5, dpi = 600)
+       width = 8, height = 6.5, dpi = 600, bg = "white")
